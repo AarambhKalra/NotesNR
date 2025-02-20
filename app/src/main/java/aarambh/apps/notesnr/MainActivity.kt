@@ -15,6 +15,7 @@ import aarambh.apps.notesnr.ui.theme.NotesNRTheme
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.Color
 
 class MainActivity : ComponentActivity() {
@@ -23,7 +24,9 @@ class MainActivity : ComponentActivity() {
         //enableEdgeToEdge()
         setContent {
             NotesNRTheme {
+
                 val viewModel by viewModels<MyViewModel>()
+                val state = viewModel.state.collectAsState()
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(
@@ -42,10 +45,4 @@ class MainActivity : ComponentActivity() {
 }
 
 
-//@Preview(showBackground = true, showSystemUi = true)
-//@Composable
-//fun GreetingPreview() {
-//    NotesNRTheme {
-//        App()
-//    }
-//}
+

@@ -14,11 +14,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text2.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -26,6 +28,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,10 +42,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun App(viewModel: MyViewModel) {
 
     val state = viewModel.state.collectAsStateWithLifecycle()
+    var isDialogOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -57,7 +65,7 @@ fun App(viewModel: MyViewModel) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = {}) {
+            FloatingActionButton(onClick = {isDialogOpen = true}) {
                 Icon(imageVector = Icons.Rounded.Add, contentDescription = null)
             }
         }
@@ -68,15 +76,19 @@ fun App(viewModel: MyViewModel) {
                 .padding(it)
                 .background(Color.White)
         ) {
-            AddDialog(
-                text = state.value.note,
-                onTextChange = {
-                    viewModel.updateNote(it)
-                },
-                onSaveChanges = {
-                    viewModel.addNote()
-                }
-            )
+            if (isDialogOpen) {
+                AddDialog(
+                    text = state.value.note,
+                    onTextChange = {
+                        viewModel.updateNote(it)
+                    },
+                    onSaveChanges = {
+                        viewModel.addNote()
+                        isDialogOpen = false
+                    },
+                    onDismiss = { isDialogOpen = false }
+                )
+            }
             LazyColumn() {
                 items(state.value.notesList) { note ->
                     Card(
@@ -85,6 +97,15 @@ fun App(viewModel: MyViewModel) {
                             .padding(12.dp)
                     ) {
                         Text(text = note, modifier = Modifier.padding(12.dp))
+                        IconButton(
+                            onClick = {
+                                viewModel.removeNote(note)
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = null
+                        ) }
                     }
                 }
             }
@@ -95,16 +116,17 @@ fun App(viewModel: MyViewModel) {
     }
 }
 
-@Preview(showBackground = true, showSystemUi = true)
+
 @Composable
 fun AddDialog(
     modifier: Modifier = Modifier,
     text: String = "",
     onTextChange: (String) -> Unit = {},
-    onSaveChanges: () -> Unit = {}
+    onSaveChanges: () -> Unit = {},
+    onDismiss: () -> Unit = {}
 ) {
     Dialog(
-        onDismissRequest = { },
+        onDismissRequest = onDismiss,
     ) {
         Card(
             modifier = Modifier
@@ -116,11 +138,12 @@ fun AddDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(text = "Add Note", fontSize = 24.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
                 Spacer(modifier = Modifier.height(12.dp))
-                TextFieldState(text = "", placeholder = "Enter Note", onValueChange = onTextChange)
+                TextFieldState(text = text, placeholder = "Enter Note", onValueChange = onTextChange)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = {
                         onSaveChanges()
+                        onDismiss()
                     },
                     modifier = Modifier.align(Alignment.End)
                 ) {
@@ -141,11 +164,19 @@ fun TextFieldState(text: String, onValueChange: (String) -> Unit = {}, placehold
             onValueChange(it)
         },
         placeholder = {
-            Text(text = "Enter Note")
+            Text(text = placeholder)
         }
     )
 }
-        
+@Preview
+@Composable
+fun AppPreview() {
+    App(
+        MyViewModel()
+    )
+}
+
+
 
 
 
