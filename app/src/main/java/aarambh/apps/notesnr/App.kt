@@ -1,86 +1,46 @@
 package aarambh.apps.notesnr
 
-import android.widget.NumberPicker.OnValueChangeListener
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.foundation.text2.input.TextFieldState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-//import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material3.Card
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DisplayMode
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import aarambh.apps.notesnr.data.Task
-import androidx.compose.material3.MaterialTheme
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
 fun App(viewModel: MyViewModel) {
     val state = viewModel.state.collectAsStateWithLifecycle()
-    var isDialogOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("TO-DO") },
-                navigationIcon = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Rounded.Menu, "Menu")
-                    }
-                }
+                title = { Text("Tasks") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { isDialogOpen = true }) {
-                Icon(Icons.Rounded.Add, "Add Note")
+            FloatingActionButton(
+                onClick = { viewModel.showAddDialog() },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(Icons.Default.Add, "Add Task")
             }
         }
     ) { padding ->
@@ -89,140 +49,119 @@ fun App(viewModel: MyViewModel) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-            ) {
-                items(state.value.tasksList) { task ->
-                    NoteCard(
-                        task = task,
-                        onDelete = { viewModel.removeNote(task) },
-                        onToggleComplete = { viewModel.toggleNoteCompletion(task) },
-                        onEdit = { newContent, newDescription -> viewModel.editNote(task, newContent, newDescription) }
+            if (state.value.taskList.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No tasks yet. Click + to add one!",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(state.value.taskList) { task ->
+                        TaskItem(
+                            task = task,
+                            onToggleCompletion = { viewModel.toggleTaskCompletion(task) },
+                            onEdit = { viewModel.startEditingTask(task) },
+                            onDelete = { viewModel.deleteTask(task) }
+                        )
+                    }
                 }
             }
-        }
 
-        if (isDialogOpen) {
-            AddNoteDialog(
-                text = state.value.note,
-                description = state.value.description,
-                selectedPriority = state.value.selectedPriority,
-                selectedDueDate = state.value.selectedDueDate,
-                onTextChange = viewModel::updateNote,
-                onDescriptionChange = viewModel::updateDescription,
-                onPriorityChange = viewModel::updatePriority,
-                onDueDateChange = viewModel::updateDueDate,
-                onSaveChanges = {
-                    viewModel.addNote()
-                    isDialogOpen = false
-                },
-                onDismiss = { isDialogOpen = false }
-            )
+            if (state.value.isDialogVisible) {
+                TaskDialog(
+                    title = state.value.currentTaskTitle,
+                    description = state.value.currentTaskDescription,
+                    onTitleChange = viewModel::updateTaskTitle,
+                    onDescriptionChange = viewModel::updateTaskDescription,
+                    onSave = { 
+                        if (state.value.editingTaskId != null) {
+                            viewModel.updateTask()
+                        } else {
+                            viewModel.addTask()
+                        }
+                    },
+                    onDismiss = viewModel::hideDialog,
+                    isEditing = state.value.editingTaskId != null
+                )
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteCard(
+fun TaskItem(
     task: Task,
-    onDelete: () -> Unit,
-    onToggleComplete: () -> Unit,
-    onEdit: (String, String?) -> Unit
+    onToggleCompletion: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    var isEditing by remember { mutableStateOf(false) }
-    var editText by remember { mutableStateOf(task.content) }
-    var editDescription by remember { mutableStateOf(task.description ?: "") }
-    
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .padding(16.dp)
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isEditing) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        OutlinedTextField(
-                            value = editText,
-                            onValueChange = { editText = it },
-                            label = { Text("Task") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editDescription,
-                            onValueChange = { editDescription = it },
-                            label = { Text("Description (Optional)") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    IconButton(onClick = {
-                        onEdit(editText, editDescription.takeIf { it.isNotBlank() })
-                        isEditing = false
-                    }) {
-                        Icon(Icons.Rounded.Check, "Save")
-                    }
-                } else {
-                    Column(modifier = Modifier.weight(1f)) {
+                Checkbox(
+                    checked = task.isCompleted,
+                    onCheckedChange = { onToggleCompletion() }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = task.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
+                        color = if (task.isCompleted) 
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        else 
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                    if (task.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = task.content,
-                            style = MaterialTheme.typography.titleMedium,
-                            textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                            text = task.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        task.description?.let { desc ->
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = desc,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Row {
-                        IconButton(onClick = onToggleComplete) {
-                            Icon(
-                                if (task.isCompleted) Icons.Rounded.CheckCircle
-                                else Icons.Filled.Check,
-                                "Toggle Complete"
-                            )
-                        }
-                        IconButton(onClick = { isEditing = true }) {
-                            Icon(Icons.Rounded.Edit, "Edit")
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Rounded.Delete, "Delete")
-                        }
                     }
                 }
             }
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Priority: ${task.priority}",
-                    color = when(task.priority) {
-                        Priority.HIGH -> Color.Red
-                        Priority.MEDIUM -> Color.Blue
-                        Priority.LOW -> Color.Green
-                    }
-                )
-                task.dueDate?.let { dueDate ->
-                    Text(
-                        text = "Due: ${SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(dueDate))}",
-                        color = if (dueDate < System.currentTimeMillis()) Color.Red else Color.Gray
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit Task",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete Task",
+                        tint = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -232,103 +171,54 @@ fun NoteCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddNoteDialog(
-    text: String,
+fun TaskDialog(
+    title: String,
     description: String,
-    selectedPriority: Priority,
-    selectedDueDate: Long?,
-    onTextChange: (String) -> Unit,
+    onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
-    onPriorityChange: (Priority) -> Unit,
-    onDueDateChange: (Long?) -> Unit,
-    onSaveChanges: () -> Unit,
-    onDismiss: () -> Unit
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+    isEditing: Boolean
 ) {
-    var showPriorityDropdown by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
                     .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                Text("Add New Task", fontSize = 20.sp)
-                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = if (isEditing) "Edit Task" else "New Task",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
                 
                 OutlinedTextField(
-                    value = text,
-                    onValueChange = onTextChange,
-                    label = { Text("Task") },
-                    modifier = Modifier.fillMaxWidth()
+                    value = title,
+                    onValueChange = onTitleChange,
+                    label = { Text("Title") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
-
+                
                 Spacer(modifier = Modifier.height(8.dp))
-
+                
                 OutlinedTextField(
                     value = description,
                     onValueChange = onDescriptionChange,
-                    label = { Text("Description (Optional)") },
-                    modifier = Modifier.fillMaxWidth()
+                    label = { Text("Description") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    maxLines = 5
                 )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Box {
-                    OutlinedButton(
-                        onClick = { showPriorityDropdown = true }
-                    ) {
-                        Text("Priority: $selectedPriority")
-                    }
-                    DropdownMenu(
-                        expanded = showPriorityDropdown,
-                        onDismissRequest = { showPriorityDropdown = false }
-                    ) {
-                        Priority.values().forEach { priority ->
-                            DropdownMenuItem(
-                                text = { Text(priority.name) },
-                                onClick = {
-                                    onPriorityChange(priority)
-                                    showPriorityDropdown = false
-                                }
-                            )
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                OutlinedButton(
-                    onClick = { showDatePicker = true }
-                ) {
-                    Text(
-                        selectedDueDate?.let {
-                            "Due: ${SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(it))}"
-                        } ?: "Set Due Date"
-                    )
-                }
-                
-                if (showDatePicker) {
-                    val datePickerState = rememberDatePickerState()
-                    DatePickerDialog(
-                        onDismissRequest = { showDatePicker = false },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                datePickerState.selectedDateMillis?.let(onDueDateChange)
-                                showDatePicker = false
-                            }) {
-                                Text("OK")
-                            }
-                        }
-                    ) {
-                        DatePicker(state = datePickerState)
-                    }
-                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
@@ -339,8 +229,12 @@ fun AddNoteDialog(
                     TextButton(onClick = onDismiss) {
                         Text("Cancel")
                     }
-                    TextButton(onClick = onSaveChanges) {
-                        Text("Save")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onSave,
+                        enabled = title.isNotBlank()
+                    ) {
+                        Text(if (isEditing) "Update" else "Add")
                     }
                 }
             }

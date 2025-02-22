@@ -6,94 +6,120 @@ import androidx.lifecycle.viewModelScope
 import aarambh.apps.notesnr.data.Task
 import aarambh.apps.notesnr.data.TaskDatabase
 import aarambh.apps.notesnr.data.TaskRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MyViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: TaskRepository
-    private val _state = MutableStateFlow(ScreenState())
-    val state: StateFlow<ScreenState> = _state.asStateFlow()
+    private val _state = MutableStateFlow(TasksScreenState())
+    val state: StateFlow<TasksScreenState> = _state.asStateFlow()
 
     init {
-        val taskDao = TaskDatabase.getDatabase(application).taskDao()
-        repository = TaskRepository(taskDao)
-        viewModelScope.launch {
-            repository.allTasks.collect { tasks ->
-                _state.value = _state.value.copy(tasksList = ArrayList(tasks))
+        val database = withContext(Dispatchers.IO) {
+            TaskDatabase.getDatabase(application)
+        }
+        repository = TaskRepository(database.taskDao())
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.allTasks.collect { tasks ->
+                    withContext(Dispatchers.Main) {
+                        _state.update { it.copy(taskList = tasks) }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
 
-    fun updateNote(note: String) {
-        _state.value = _state.value.copy(note = note)
+    fun updateTaskTitle(title: String) {
+        _state.update { it.copy(currentTaskTitle = title) }
     }
 
-    fun updateDescription(description: String) {
-        _state.value = _state.value.copy(description = description)
+    fun updateTaskDescription(description: String) {
+        _state.update { it.copy(currentTaskDescription = description) }
     }
 
-    fun updatePriority(priority: Priority) {
-        _state.value = _state.value.copy(selectedPriority = priority)
-    }
-
-    fun updateDueDate(dueDate: Long?) {
-        _state.value = _state.value.copy(selectedDueDate = dueDate)
-    }
-
-    fun addNote() {
-        val task = Task(
-            content = state.value.note,
-            description = state.value.description.takeIf { it.isNotBlank() },
-            priority = state.value.selectedPriority,
-            dueDate = state.value.selectedDueDate,
-            isCompleted = false,
-            createdAt = System.currentTimeMillis(),
-            modifiedAt = System.currentTimeMillis()
-        )
+    fun addTask() {
+        if (_state.value.currentTaskTitle.isBlank()) return
+        
         viewModelScope.launch {
-            repository.insertTask(task)
-            _state.value = _state.value.copy(
-                note = "",
-                description = "",
-                selectedPriority = Priority.MEDIUM,
-                selectedDueDate = null
+            val task = Task(
+                title = _state.value.currentTaskTitle,
+                description = _state.value.currentTaskDescription
             )
+            repository.insertTask(task)
+            clearAndHideDialog()
         }
     }
 
-    fun removeNote(task: Task) {
+    fun showAddDialog() {
+        _state.update { it.copy(isDialogVisible = true) }
+    }
+
+    fun hideDialog() {
+        clearAndHideDialog()
+    }
+
+    fun deleteTask(task: Task) {
         viewModelScope.launch {
             repository.deleteTask(task)
         }
     }
 
-    fun toggleNoteCompletion(task: Task) {
+    fun toggleTaskCompletion(task: Task) {
         viewModelScope.launch {
             repository.updateTaskCompletion(task.id, !task.isCompleted)
         }
     }
 
-    fun editNote(task: Task, newContent: String, newDescription: String? = null) {
+    fun startEditingTask(task: Task) {
+        _state.update {
+            it.copy(
+                editingTaskId = task.id,
+                currentTaskTitle = task.title,
+                currentTaskDescription = task.description,
+                isDialogVisible = true
+            )
+        }
+    }
+
+    fun updateTask() {
+        val editingTaskId = _state.value.editingTaskId ?: return
+        if (_state.value.currentTaskTitle.isBlank()) return
+
         viewModelScope.launch {
-            repository.updateTask(task.copy(
-                content = newContent,
-                description = newDescription ?: task.description,
-                modifiedAt = System.currentTimeMillis()
-            ))
+            repository.updateTask(
+                editingTaskId,
+                _state.value.currentTaskTitle,
+                _state.value.currentTaskDescription
+            )
+            clearAndHideDialog()
+        }
+    }
+
+    private fun clearAndHideDialog() {
+        _state.update {
+            it.copy(
+                isDialogVisible = false,
+                currentTaskTitle = "",
+                currentTaskDescription = "",
+                editingTaskId = null
+            )
         }
     }
 }
 
-data class ScreenState(
-    var tasksList: List<Task> = emptyList(),
-    var note: String = "",
-    var description: String = "",
-    var selectedPriority: Priority = Priority.MEDIUM,
-    var selectedDueDate: Long? = null
+data class TasksScreenState(
+    val taskList: List<Task> = emptyList(),
+    val currentTaskTitle: String = "",
+    val currentTaskDescription: String = "",
+    val isDialogVisible: Boolean = false,
+    val editingTaskId: Long? = null
 )
-
-enum class Priority {
-    LOW, MEDIUM, HIGH
-}
